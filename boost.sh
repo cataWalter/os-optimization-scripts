@@ -1,266 +1,299 @@
 #!/bin/bash
+set -e          # Exit immediately if any command fails
+set -o pipefail # Catch errors in piped commands
 
 # =================================================================
-# MX Linux Fluxbox ULTIMATE Optimization Script (v2.0 - 2025)
-# Features: 
-# - RAM Target: < 200MB Idle
-# - Auto-CPU Detection (Microcode)
-# - zRAM Optimized (Compression > Paging)
-# - EarlyOOM (Prevents hard freezes)
-# - Firefox Hardened + RAM Cache (No Disk I/O)
-# - OnlyOffice (Official Repo)
+# MX LINUX FLUXBOX - GOLD MASTER (v8.3 - STABLE FIX)
+# -----------------------------------------------------------------
+# TARGET: Dual Core | 4GB RAM | HDD | SysVinit
+# -----------------------------------------------------------------
+# FIXES in v8.3:
+# - FIXED: 'sed' syntax error in Startup Script (Line 265 crash).
+# - FIXED: Sysctl warnings on restricted kernels.
+# - CONFIRMED: Anti-Logout mechanism works (Logs verified).
 # =================================================================
 
-# Check for root privileges
+# --- 0. LOGGING SETUP ---
+LOG_FILE="/var/log/mx_optimization_v8.3_$(date +%Y%m%d_%H%M%S).log"
+touch "$LOG_FILE"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+log_info() { echo -e "${GREEN}[INFO] $(date +'%T') $1${NC}"; }
+log_warn() { echo -e "${YELLOW}[WARN] $(date +'%T') $1${NC}"; }
+log_error() { echo -e "${RED}[ERROR] $(date +'%T') $1${NC}"; }
+log_section() { 
+    echo -e "\n${CYAN}============================================================"
+    echo -e " STEP: $1"
+    echo -e "============================================================${NC}" 
+}
+
+error_handler() {
+    # Ensure we clean up the lock if the script crashes
+    [ -f /usr/sbin/policy-rc.d ] && rm -f /usr/sbin/policy-rc.d
+    log_error "Script failed at line $1. Check $LOG_FILE."
+    exit 1
+}
+trap 'error_handler $LINENO' ERR
+
+# --- CONFIGURATION ---
+KEYBOARD_LAYOUT="it"
+GRUB_TIMEOUT_VAL=0
+
+# --- 1. PRE-FLIGHT CHECKS ---
+log_section "Pre-Flight Checks"
+
 if [ "$EUID" -ne 0 ]; then
-  echo "Please run as root (sudo)."
-  exit
+  log_error "Please run as root (sudo bash ./install.sh)."
+  exit 1
 fi
 
-echo "--- Starting Ultimate Optimization (v2.0) ---"
-
-# 0. CPU Detection & Variable Setup
-echo "[0/11] Detecting Hardware..."
-CPU_VENDOR=$(grep -m 1 'vendor_id' /proc/cpuinfo | awk '{print $3}')
-if [ "$CPU_VENDOR" == "GenuineIntel" ]; then
-    echo " -> Intel CPU detected."
-    MICROCODE="intel-microcode"
-elif [ "$CPU_VENDOR" == "AuthenticAMD" ]; then
-    echo " -> AMD CPU detected."
-    MICROCODE="amd64-microcode"
+if [ -n "$SUDO_USER" ]; then
+    TARGET_USER="$SUDO_USER"
 else
-    MICROCODE=""
+    log_error "Cannot detect actual user. Run with sudo."
+    exit 1
 fi
 
-# 1. Package Installation (Essentials & Dependencies)
-echo "[1/11] Installing essential utilities..."
+USER_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
+log_info "Target User: $TARGET_USER"
+log_info "Home Dir:    $USER_HOME"
+log_info "Log File:    $LOG_FILE"
+
+echo ""
+log_warn "SAFE MODE ACTIVE: Services locked to prevent logout."
+echo "Press ENTER to start..."
+read -r
+
+# --- 2. SERVICE LOCK (ANTI-LOGOUT) ---
+log_section "1/15 Locking Services"
+# This prevents APT from restarting LightDM/DBus and killing the session
+echo "#!/bin/sh" > /usr/sbin/policy-rc.d
+echo "exit 101" >> /usr/sbin/policy-rc.d
+chmod +x /usr/sbin/policy-rc.d
+log_info "Service restarts blocked."
+
+# --- 3. DEPENDENCIES ---
+log_section "2/15 Dependencies"
 apt update
+if ! dpkg -s debconf-utils >/dev/null 2>&1; then
+    apt install -y debconf-utils
+fi
+if ! dpkg -s localepurge >/dev/null 2>&1; then
+    echo "localepurge localepurge/nopurge multiselect en_US.UTF-8, it_IT.UTF-8" | debconf-set-selections
+    echo "localepurge localepurge/use-dpkg-feature boolean true" | debconf-set-selections
+fi
 
-# Install core tools, correct microcode, and EarlyOOM (Critical for low RAM)
-apt install -y nodm ufw p7zip-full unrar-free zip unzip ffmpeg \
-               libavcodec-extra $MICROCODE earlyoom \
-               localepurge lxpolkit network-manager-gnome nitrogen \
-               volumeicon-alsa fonts-croscore gnupg ca-certificates curl
+# --- 4. INSTALLATION ---
+log_section "3/15 Installing Utilities"
+log_warn "ACTION REQUIRED: Confirm installation."
 
-# Configure Localepurge (Automated - Keep only English and Italian)
-# Prevents the interactive popup during install
-echo "localepurge localepurge/nopurge multiselect en_US.UTF-8, it_IT.UTF-8" | debconf-set-selections
-localepurge
+apt install --no-install-recommends \
+    nodm lxpolkit ufw p7zip-full unrar-free zip unzip \
+    ffmpeg libavcodec-extra intel-microcode amd64-microcode \
+    localepurge earlyoom preload
 
-# 2. OnlyOffice Installation (Official Repository)
-echo "[2/11] Adding OnlyOffice Repository and Installing..."
-mkdir -p /usr/share/keyrings
-curl -fsSL https://download.onlyoffice.com/repo/onlyoffice.key | gpg --dearmor -o /usr/share/keyrings/onlyoffice.gpg
-echo "deb [signed-by=/usr/share/keyrings/onlyoffice.gpg] https://download.onlyoffice.com/repo/debian squeeze main" > /etc/apt/sources.list.d/onlyoffice.list
-apt update
-apt install -y onlyoffice-desktopeditors
+# --- 5. PROTECT PACKAGES ---
+log_section "4/15 Protecting MX Apps"
+log_info "Marking MX apps as manual..."
+apt-mark manual mx-apps-fluxbox mx-fluxbox mx-updater cleanup-notifier-mx
 
-# 3. Service Management (Disabling Bloat)
-echo "[3/11] Disabling unnecessary background services..."
+# --- 6. NODM CONFIG ---
+log_section "5/15 Configuring NODM"
+NODM_FILE="/etc/default/nodm"
+if [ -f "$NODM_FILE" ]; then
+    sed -i 's/^NODM_ENABLED=.*/NODM_ENABLED=true/' "$NODM_FILE"
+    sed -i "s/^NODM_USER=.*/NODM_USER=$TARGET_USER/" "$NODM_FILE"
+    log_info "NODM configured."
+else
+    log_error "NODM config not found!"
+fi
+
+# --- 7. DM SWITCH ---
+log_section "6/15 Switching Display Manager"
+if [ -x "/etc/init.d/lightdm" ]; then
+    update-rc.d lightdm disable || true
+    log_info "LightDM disabled."
+fi
+if [ -x "/etc/init.d/nodm" ]; then
+    update-rc.d nodm enable || true
+    log_info "NODM enabled."
+fi
+
+# --- 8. SERVICE MANAGEMENT ---
+log_section "7/15 Disabling Services"
 SERVICES=(
     cups cups-browsed bluetooth speech-dispatcher 
     plymouth cryptdisks cryptdisks-early 
     rsyslog uuidd smbd nmbd avahi-daemon 
     rpcbind nfs-common chrony exim4 saned
 )
-
 for service in "${SERVICES[@]}"; do
-    service "$service" stop 2>/dev/null
-    update-rc.d "$service" disable 2>/dev/null
+    if [ -x "/etc/init.d/$service" ]; then
+        update-rc.d "$service" disable 2>/dev/null || true
+        log_info "Disabled service: $service"
+    fi
 done
 
-# 4. Aggressive Purging
-echo "[4/11] Purging heavy packages and keyring..."
-apt purge -y xdg-desktop-portal xdg-desktop-portal-gtk modemmanager \
-           orca magnus onboard speech-dispatcher xfburn hplip \
-           sane-utils blueman bluez flatpak mx-updater \
-           cleanup-notifier-mx mx-welcome mx-tour baobab catfish \
-           conky-all policykit-1-gnome libsane1 \
-           exim4-base exim4-config lightdm \
-           gnome-keyring gnome-keyring-pkcs11 libpam-gnome-keyring
+# --- 9. REMOVING BLOAT ---
+log_section "8/15 Removing Bloat"
+log_info "Keeping critical dependencies installed (will disable them later)..."
 
-# Clean up "rc" packages
-dpkg --purge $(dpkg -l | grep "^rc" | awk '{print $2}') 2>/dev/null
+# Removed: policykit-1-gnome, plymouth*, mx-welcome, mx-tour (Preserved)
+apt purge xdg-desktop-portal xdg-desktop-portal-gtk modemmanager \
+          orca magnus onboard speech-dispatcher xfburn hplip \
+          sane-utils blueman bluez flatpak baobab catfish \
+          libsane1 \
+          exim4-base exim4-config gnome-keyring gnome-keyring-pkcs11 libpam-gnome-keyring
 
-# 5. NODM Configuration (Auto-Login)
-echo "[5/11] Configuring NODM for Auto-login..."
-sed -i "s/^NODM_USER=.*/NODM_USER=${SUDO_USER}/" /etc/default/nodm
-sed -i "s/^NODM_ENABLED=.*/NODM_ENABLED=true/" /etc/default/nodm
+dpkg --purge $(dpkg -l | grep "^rc" | awk '{print $2}') 2>/dev/null || true
 
-# 6. Kernel, EarlyOOM & System Tweaks
-echo "[6/11] Applying kernel tweaks & Anti-Freeze..."
+# --- 10. UNLOCK SERVICES ---
+log_section "9/15 Unlocking Services"
+rm -f /usr/sbin/policy-rc.d
+log_info "Service restarts unblocked."
 
-# Swappiness 100 + zRAM = Aggressively compress idle apps to keep system responsive
+# --- 11. KERNEL & HDD TWEAKS ---
+log_section "10/15 System Tuning"
+# Suppress errors if NMI watchdog is locked
 cat <<EOF > /etc/sysctl.d/99-minimal.conf
 vm.swappiness=100
 vm.vfs_cache_pressure=50
 kernel.nmi_watchdog=0
 net.ipv6.conf.all.disable_ipv6 = 1
 EOF
-sysctl --system
+sysctl --system >/dev/null || true
 
-# Configure EarlyOOM: Kill browser if RAM < 5% to prevent total system freeze
-# Avoid killing the display manager or window manager
-sed -i 's/^EARLYOOM_ARGS=.*/EARLYOOM_ARGS="-m 5 -s 5 --avoid ^(Xorg|nodm|fluxbox)$"/' /etc/default/earlyoom
-service earlyoom restart
+cat <<EOF > /etc/udev/rules.d/60-hdd-scheduler.rules
+ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="1", ATTR{queue/scheduler}="bfq"
+EOF
 
-# FS Optimization
-sed -i 's/errors=remount-ro/noatime,errors=remount-ro/' /etc/fstab
+log_info "Optimizing fstab..."
+[ ! -f "/etc/fstab.bak.orig" ] && cp "/etc/fstab" "/etc/fstab.bak.orig"
+sed -i 's/errors=remount-ro/noatime,nodiratime,commit=60,errors=remount-ro/' /etc/fstab
 
-# 7. zRAM Configuration (60% of RAM)
-echo "[7/11] Configuring zRAM..."
-if [ -f /etc/default/zramswap ]; then
-    sed -i 's/^PERCENT=.*/PERCENT=60/' /etc/default/zramswap
-    update-rc.d zramswap defaults
-    service zramswap restart
+# Tmpfs
+if ! grep -q "tmpfs /tmp" /etc/fstab; then
+    echo "tmpfs /tmp tmpfs defaults,noatime,mode=1777,size=256M 0 0" >> /etc/fstab
+fi
+if ! grep -q "tmpfs /var/log" /etc/fstab; then
+    echo "tmpfs /var/log tmpfs defaults,noatime,mode=0755,size=128M 0 0" >> /etc/fstab
 fi
 
-# 8. UI & Accessibility Hard-Kill (Persistent)
-echo "[8/11] Permanently disabling accessibility bus..."
-# Using dpkg-divert ensures updates don't reinstall these files
-TARGETS=(
-    "/usr/libexec/at-spi-bus-launcher"
-    "/usr/libexec/at-spi2-registryd"
-    "/etc/xdg/autostart/at-spi-dbus-bus.desktop"
-)
+# --- 12. ZRAM & EARLYOOM ---
+log_section "11/15 Memory Config"
+if [ -f /etc/default/zramswap ]; then
+    sed -i 's/^PERCENT=.*/PERCENT=60/' /etc/default/zramswap
+fi
+if [ -f /etc/default/earlyoom ]; then
+    sed -i 's/^EARLYOOM_ARGS=.*/EARLYOOM_ARGS="-m 5 -s 5 --avoid ^(Xorg|nodm|fluxbox)$"/' /etc/default/earlyoom
+fi
 
+# --- 13. ACCESSIBILITY & TTY ---
+log_section "12/15 Disabling Accessibility"
+TARGETS=("/usr/libexec/at-spi-bus-launcher" "/usr/libexec/at-spi2-registryd" "/etc/xdg/autostart/at-spi-dbus-bus.desktop")
 for target in "${TARGETS[@]}"; do
     if [ -f "$target" ]; then
         dpkg-divert --add --rename --divert "$target.disabled" "$target"
     fi
 done
 
-# Reduce TTYs to 2
+cp /etc/inittab /etc/inittab.bak.$(date +%s)
 sed -i 's/^[3-6]:23:respawn:/#&/' /etc/inittab
 
-# 9. Firefox Optimization (uBlock + RAM Cache)
-echo "[9/11] Hardening Firefox (Policies + User.js)..."
+CURRENT_HOSTNAME=$(hostname)
+if ! grep -q "127.0.1.1.*$CURRENT_HOSTNAME" /etc/hosts; then
+    echo "127.0.1.1 $CURRENT_HOSTNAME" >> /etc/hosts
+fi
 
-mkdir -p /etc/firefox/policies
-cat <<EOF > /etc/firefox/policies/policies.json
-{
-  "policies": {
-    "DisableTelemetry": true,
-    "DisableFirefoxStudies": true,
-    "DisablePocket": true,
-    "DisableSystemAddonUpdate": true,
-    "DontCheckDefaultBrowser": true,
-    "DisplayBookmarksToolbar": "never",
-    "Extensions": {
-      "Install": [
-        "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi"
-      ]
-    },
-    "UserMessaging": {
-      "ExtensionRecommendations": false,
-      "FeatureRecommendations": false,
-      "UrlbarInterventions": false,
-      "SkipOnboarding": true,
-      "Locked": true
-    }
-  }
-}
-EOF
-
-USER_HOME=$(eval echo "~${SUDO_USER}")
+# --- 14. FIREFOX ---
+log_section "13/15 Firefox Optimization"
 FF_DIR="$USER_HOME/.mozilla/firefox"
-
 if [ -d "$FF_DIR" ]; then
-    find "$FF_DIR" -maxdepth 1 -type d -name "*.default*" | while read profile; do
-        echo "Injecting user.js into: $profile"
-        cat <<EOF > "$profile/user.js"
-// PERFORMANCE
-user_pref("accessibility.force_disabled", 1);
-user_pref("dom.ipc.processCount", 2);
-user_pref("network.prefetch-next", false);
+    find "$FF_DIR" -maxdepth 1 -type d -name "*.default*" | while read -r PROFILE_DIR; do
+        log_info "Optimizing: $(basename "$PROFILE_DIR")"
+        USER_JS="$PROFILE_DIR/user.js"
+        [ -f "$USER_JS" ] && cp "$USER_JS" "${USER_JS}.bak"
 
-// CACHE (RAM ONLY - Reduces Stutter)
+        cat <<EOF > "$USER_JS"
+// === v8.3 OPTIMIZATIONS ===
 user_pref("browser.cache.disk.enable", false);
+user_pref("browser.cache.disk.capacity", 0);
 user_pref("browser.cache.memory.enable", true);
-user_pref("browser.cache.memory.capacity", 256000); 
-user_pref("browser.sessionstore.interval", 15000000);
-
-// PRIVACY
-user_pref("toolkit.telemetry.enabled", false);
-user_pref("browser.newtabpage.activity-stream.showSponsored", false);
+user_pref("browser.cache.memory.capacity", -1);
+user_pref("browser.sessionstore.interval", 900000);
+user_pref("toolkit.cosmeticAnimations.enabled", false);
+user_pref("browser.download.animateNotifications", false);
+user_pref("general.smoothScroll", false); 
+user_pref("media.ffmpeg.vaapi.enabled", true);
+user_pref("media.hardware-video-decoding.enabled", true);
+user_pref("layers.acceleration.force-enabled", true);
+user_pref("browser.tabs.unloadOnLowMemory", true);
 user_pref("extensions.pocket.enabled", false);
-user_pref("browser.shell.checkDefaultBrowser", false);
+user_pref("toolkit.telemetry.enabled", false);
 EOF
-        chown "${SUDO_USER}:${SUDO_USER}" "$profile/user.js"
+        chown "${TARGET_USER}:${TARGET_USER}" "$USER_JS"
     done
 fi
 
-# 10. Fluxbox Startup Script
-echo "[10/11] Recreating Fluxbox startup script..."
+# --- 15. STARTUP SCRIPT (FIXED) ---
+log_section "14/15 Startup Script"
 STARTUP_FILE="$USER_HOME/.fluxbox/startup"
-cp "$STARTUP_FILE" "${STARTUP_FILE}.bak_$(date +%F)"
+if [ -f "$STARTUP_FILE" ]; then
+    cp "$STARTUP_FILE" "${STARTUP_FILE}.bak.$(date +%s)"
+    
+    # Disable dependencies we kept installed
+    sed -i 's/^conkystart/#conkystart/g' "$STARTUP_FILE"
+    sed -i 's|^/usr/lib/policykit-1-gnome/.*|#&|g' "$STARTUP_FILE"
+    sed -i 's/^mx-welcome/#mx-welcome/g' "$STARTUP_FILE"
+    sed -i 's/^picom/#picom/g' "$STARTUP_FILE"
+    sed -i 's/^compton/#compton/g' "$STARTUP_FILE"
 
-cat <<EOF > "$STARTUP_FILE"
-#!/bin/sh
-# -------------------------------------------------
-# Optimized Fluxbox Startup (Italy / Minimal RAM)
-# -------------------------------------------------
-
-localize_fluxbox_menu-mx
+    read -r -d '' OPT_BLOCK << EOM || true
+# === GOLD MASTER v8.3 ===
 export NO_AT_BRIDGE=1
-setxkbmap it &
-
-# LXPolkit (Required for Root Apps)
-/usr/lib/x86_64-linux-gnu/lxpolkit &
-
-# Network Manager (No Agent = No Keyring Errors)
-nm-applet --no-agent &
-
-# Audio
-pipewire-start &
-sleep 1
-volumeicon -c volumeicon-fluxbox &
-
-# Wallpaper (Nitrogen)
-if [ -x "/usr/bin/nitrogen" ]; then
-    if [ -e "\$HOME/.config/nitrogen/bg-saved.cfg" ]; then
-        nitrogen --restore &
+setxkbmap $KEYBOARD_LAYOUT &
+lxpolkit &
+# ========================
+EOM
+    if ! grep -q "GOLD MASTER" "$STARTUP_FILE"; then
+        # FIX: Escape newlines for sed before insertion
+        ESCAPED_BLOCK=$(echo "$OPT_BLOCK" | sed ':a;N;$!ba;s/\n/\\n/g')
+        sed -i "/exec fluxbox/i $ESCAPED_BLOCK" "$STARTUP_FILE"
+        log_info "Startup script updated."
     else
-        xsetroot -solid "#222222"
+        log_info "Startup optimization already present."
     fi
+    chown "${TARGET_USER}:${TARGET_USER}" "$STARTUP_FILE"
 fi
 
-# Tint2 Panel
-tint2session &
-
-# Power Saving
-xset s on
-xset s 600 600
-xset -dpms
-
-# Start Fluxbox
-exec dbus-launch --exit-with-session fluxbox
-EOF
-
-chown ${SUDO_USER}:${SUDO_USER} "$STARTUP_FILE"
-chmod +x "$STARTUP_FILE"
-
-# 11. Enable Sudo-less Poweroff (For Fluxbox Menu)
-echo "[11/11] Enabling sudo-less Shutdown/Reboot..."
-echo "${SUDO_USER} ALL=(ALL) NOPASSWD: /sbin/poweroff, /sbin/reboot" > /etc/sudoers.d/fluxbox-power
-chmod 0440 /etc/sudoers.d/fluxbox-power
-
-# Patch Menu (Attempt)
-MENU_FILE="$USER_HOME/.fluxbox/menu"
-if [ -f "$MENU_FILE" ]; then
-    sed -i 's/\[exit\] (Exit)/\[exec\] (Shutdown) {sudo poweroff}\n\t\[exec\] (Reboot) {sudo reboot}\n\t\[exit\] (Logout)/' "$MENU_FILE"
+# --- 16. CLEANUP & BOOT ---
+log_section "15/15 Final Cleanup"
+GRUB_FILE="/etc/default/grub"
+sed -i "s/^GRUB_TIMEOUT=[0-9]*/GRUB_TIMEOUT=$GRUB_TIMEOUT_VAL/" "$GRUB_FILE"
+sed -i 's/splash//g' "$GRUB_FILE"
+if ! grep -q "fastboot" "$GRUB_FILE"; then
+    sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="fastboot quiet /' "$GRUB_FILE"
 fi
+update-grub
 
-# Final Cleanup
-apt autoremove --purge -y
+rm -rf "$USER_HOME/.config/conky"
+rm -f "$USER_HOME/.config/autostart/conky.desktop"
+
+# Disable autostart for things we kept installed but don't want
+[ -f /etc/xdg/autostart/mx-welcome.desktop ] && mv /etc/xdg/autostart/mx-welcome.desktop /etc/xdg/autostart/mx-welcome.desktop.bak
+[ -f /etc/xdg/autostart/mx-tour.desktop ] && mv /etc/xdg/autostart/mx-tour.desktop /etc/xdg/autostart/mx-tour.desktop.bak
+
+log_warn "ACTION REQUIRED: Confirm Auto-Remove."
+apt autoremove --purge
 apt clean
 
-echo "===================================================="
-echo " OPTIMIZATION v2.0 COMPLETE"
-echo "===================================================="
-echo " 1. SYSTEM: Swappiness set to 100 for zRAM efficiency."
-echo " 2. SAFETY: EarlyOOM installed (prevents freezing)."
-echo " 3. NETWORK: Connect via icon. If password fails,"
-echo "    mark connection 'Available to all users'."
-echo "===================================================="
-echo " Please reboot now."
+log_section "OPTIMIZATION COMPLETE (v8.3)"
+log_info "Log file: $LOG_FILE"
+log_info "Please reboot manually to apply changes."
