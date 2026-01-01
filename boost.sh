@@ -3,18 +3,20 @@ set -e          # Exit immediately if any command fails
 set -o pipefail # Catch errors in piped commands
 
 # =================================================================
-# MX LINUX FLUXBOX - GOLD MASTER (v8.3 - STABLE FIX)
+# MX LINUX FLUXBOX - GOLD MASTER (v8.4 - EXTENDED CLEANUP)
 # -----------------------------------------------------------------
 # TARGET: Dual Core | 4GB RAM | HDD | SysVinit
 # -----------------------------------------------------------------
-# FIXES in v8.3:
-# - FIXED: 'sed' syntax error in Startup Script (Line 265 crash).
-# - FIXED: Sysctl warnings on restricted kernels.
-# - CONFIRMED: Anti-Logout mechanism works (Logs verified).
+# CHANGES in v8.4:
+# - ADDED: Force removal of broken printer-driver-cups-pdf.
+# - ADDED: Aggressive purging of VPN, Printing, VM Tools, & Bloatware.
+# - ADDED: Removal of MX-Tour, MX-Welcome, Conky, and Samba.
+# - UPDATED: Localepurge configuration and execution.
+# - UPDATED: Explicit service enabling for ZRAM/EarlyOOM.
 # =================================================================
 
 # --- 0. LOGGING SETUP ---
-LOG_FILE="/var/log/mx_optimization_v8.3_$(date +%Y%m%d_%H%M%S).log"
+LOG_FILE="/var/log/mx_optimization_v8.4_$(date +%Y%m%d_%H%M%S).log"
 touch "$LOG_FILE"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
@@ -44,6 +46,8 @@ trap 'error_handler $LINENO' ERR
 
 # --- CONFIGURATION ---
 KEYBOARD_LAYOUT="it"
+# Note: Adding Italian to localepurge to match keyboard layout, plus English as requested
+LOCALES_TO_KEEP="en, en_US, en_US.UTF-8, it, it_IT, it_IT.UTF-8"
 GRUB_TIMEOUT_VAL=0
 
 # --- 1. PRE-FLIGHT CHECKS ---
@@ -72,26 +76,42 @@ echo "Press ENTER to start..."
 read -r
 
 # --- 2. SERVICE LOCK (ANTI-LOGOUT) ---
-log_section "1/15 Locking Services"
+log_section "1/16 Locking Services"
 # This prevents APT from restarting LightDM/DBus and killing the session
 echo "#!/bin/sh" > /usr/sbin/policy-rc.d
 echo "exit 101" >> /usr/sbin/policy-rc.d
 chmod +x /usr/sbin/policy-rc.d
 log_info "Service restarts blocked."
 
-# --- 3. DEPENDENCIES ---
-log_section "2/15 Dependencies"
+# --- 3. FIX BROKEN PACKAGES (NEW) ---
+log_section "2/16 Fixing Broken Packages"
+# Specific fix requested for printer-driver-cups-pdf
+log_info "Force removing printer-driver-cups-pdf to clear locks..."
+echo '#!/bin/sh' | tee /var/lib/dpkg/info/printer-driver-cups-pdf.prerm
+echo '#!/bin/sh' | tee /var/lib/dpkg/info/printer-driver-cups-pdf.postrm
+chmod +x /var/lib/dpkg/info/printer-driver-cups-pdf.prerm
+chmod +x /var/lib/dpkg/info/printer-driver-cups-pdf.postrm
+dpkg --remove --force-remove-reinstreq printer-driver-cups-pdf || true
+log_info "Broken package fix applied."
+
+# --- 4. DEPENDENCIES ---
+log_section "3/16 Dependencies & Config"
 apt update
+
 if ! dpkg -s debconf-utils >/dev/null 2>&1; then
     apt install -y debconf-utils
 fi
+
+# Updated Localepurge config based on request
 if ! dpkg -s localepurge >/dev/null 2>&1; then
-    echo "localepurge localepurge/nopurge multiselect en_US.UTF-8, it_IT.UTF-8" | debconf-set-selections
+    echo "localepurge localepurge/nopurge multiselect $LOCALES_TO_KEEP" | debconf-set-selections
     echo "localepurge localepurge/use-dpkg-feature boolean true" | debconf-set-selections
+    echo "localepurge localepurge/summary boolean true" | debconf-set-selections
+    echo "localepurge localepurge/verbose boolean false" | debconf-set-selections
 fi
 
-# --- 4. INSTALLATION ---
-log_section "3/15 Installing Utilities"
+# --- 5. INSTALLATION ---
+log_section "4/16 Installing Utilities"
 log_warn "ACTION REQUIRED: Confirm installation."
 
 apt install --no-install-recommends \
@@ -99,13 +119,13 @@ apt install --no-install-recommends \
     ffmpeg libavcodec-extra intel-microcode amd64-microcode \
     localepurge earlyoom preload
 
-# --- 5. PROTECT PACKAGES ---
-log_section "4/15 Protecting MX Apps"
-log_info "Marking MX apps as manual..."
+# --- 6. PROTECT PACKAGES ---
+log_section "5/16 Protecting MX Apps"
+log_info "Marking essential MX apps as manual..."
 apt-mark manual mx-apps-fluxbox mx-fluxbox mx-updater cleanup-notifier-mx
 
-# --- 6. NODM CONFIG ---
-log_section "5/15 Configuring NODM"
+# --- 7. NODM CONFIG ---
+log_section "6/16 Configuring NODM"
 NODM_FILE="/etc/default/nodm"
 if [ -f "$NODM_FILE" ]; then
     sed -i 's/^NODM_ENABLED=.*/NODM_ENABLED=true/' "$NODM_FILE"
@@ -115,8 +135,8 @@ else
     log_error "NODM config not found!"
 fi
 
-# --- 7. DM SWITCH ---
-log_section "6/15 Switching Display Manager"
+# --- 8. DM SWITCH ---
+log_section "7/16 Switching Display Manager"
 if [ -x "/etc/init.d/lightdm" ]; then
     update-rc.d lightdm disable || true
     log_info "LightDM disabled."
@@ -126,8 +146,8 @@ if [ -x "/etc/init.d/nodm" ]; then
     log_info "NODM enabled."
 fi
 
-# --- 8. SERVICE MANAGEMENT ---
-log_section "7/15 Disabling Services"
+# --- 9. SERVICE MANAGEMENT ---
+log_section "8/16 Disabling Services"
 SERVICES=(
     cups cups-browsed bluetooth speech-dispatcher 
     plymouth cryptdisks cryptdisks-early 
@@ -141,26 +161,50 @@ for service in "${SERVICES[@]}"; do
     fi
 done
 
-# --- 9. REMOVING BLOAT ---
-log_section "8/15 Removing Bloat"
-log_info "Keeping critical dependencies installed (will disable them later)..."
+# --- 10. REMOVING BLOAT (EXTENDED) ---
+log_section "9/16 Removing Bloat"
+log_info "Purging requested packages..."
 
-# Removed: policykit-1-gnome, plymouth*, mx-welcome, mx-tour (Preserved)
-apt purge xdg-desktop-portal xdg-desktop-portal-gtk modemmanager \
-          orca magnus onboard speech-dispatcher xfburn hplip \
-          sane-utils blueman bluez flatpak baobab catfish \
-          libsane1 \
-          exim4-base exim4-config gnome-keyring gnome-keyring-pkcs11 libpam-gnome-keyring
+# 1. Printing & Drivers
+apt purge -y printer-driver-* cups* system-config-printer* || true
 
+# 2. Networking / VPN / Dial-up
+apt purge -y network-manager-openvpn network-manager-pptp network-manager-vpnc \
+             openconnect openvpn ppp wvdial mobile-broadband-provider-info \
+             telnet ftp whois sendemail || true
+
+# 3. Virtualization & Fingerprint
+apt purge -y open-vm-tools fprintd || true
+
+# 4. Utilities & Media Tools
+apt purge -y mc galculator sysbench samba smbclient python3-smbc \
+             xorriso dvd+rw-tools libburn4t64 genisoimage growisofs \
+             cdparanoia vcdimager djvulibre-bin mtools pacpl \
+             guvcview bluez-obexd testdisk nwipe gtkhash || true
+
+# 5. Desktop & UI Bloat (Conky, Clipman, etc)
+apt purge -y conky-all mx-conky xfce4-clipman clipman \
+             xdg-desktop-portal xdg-desktop-portal-gtk modemmanager \
+             orca magnus onboard speech-dispatcher xfburn hplip \
+             sane-utils blueman bluez flatpak baobab catfish \
+             libsane1 mugshot || true
+
+# 6. MX Specific (Tour/Welcome) - NOW PURGING as requested
+apt purge -y mx-tour mx-welcome mx-welcome-data || true
+
+# 7. Mail & Keyrings
+apt purge -y exim4-base exim4-config gnome-keyring gnome-keyring-pkcs11 libpam-gnome-keyring || true
+
+log_info "Cleaning residual configs..."
 dpkg --purge $(dpkg -l | grep "^rc" | awk '{print $2}') 2>/dev/null || true
 
-# --- 10. UNLOCK SERVICES ---
-log_section "9/15 Unlocking Services"
+# --- 11. UNLOCK SERVICES ---
+log_section "10/16 Unlocking Services"
 rm -f /usr/sbin/policy-rc.d
 log_info "Service restarts unblocked."
 
-# --- 11. KERNEL & HDD TWEAKS ---
-log_section "10/15 System Tuning"
+# --- 12. KERNEL & HDD TWEAKS ---
+log_section "11/16 System Tuning"
 # Suppress errors if NMI watchdog is locked
 cat <<EOF > /etc/sysctl.d/99-minimal.conf
 vm.swappiness=100
@@ -186,8 +230,8 @@ if ! grep -q "tmpfs /var/log" /etc/fstab; then
     echo "tmpfs /var/log tmpfs defaults,noatime,mode=0755,size=128M 0 0" >> /etc/fstab
 fi
 
-# --- 12. ZRAM & EARLYOOM ---
-log_section "11/15 Memory Config"
+# --- 13. ZRAM & EARLYOOM ---
+log_section "12/16 Memory Config"
 if [ -f /etc/default/zramswap ]; then
     sed -i 's/^PERCENT=.*/PERCENT=60/' /etc/default/zramswap
 fi
@@ -195,8 +239,17 @@ if [ -f /etc/default/earlyoom ]; then
     sed -i 's/^EARLYOOM_ARGS=.*/EARLYOOM_ARGS="-m 5 -s 5 --avoid ^(Xorg|nodm|fluxbox)$"/' /etc/default/earlyoom
 fi
 
-# --- 13. ACCESSIBILITY & TTY ---
-log_section "12/15 Disabling Accessibility"
+# Enable Memory Services (New Request)
+log_info "Enabling Memory Services..."
+service zramswap start || true
+update-rc.d zramswap enable || true
+update-rc.d zramswap defaults || true
+
+service earlyoom start || true
+update-rc.d earlyoom enable || true
+
+# --- 14. ACCESSIBILITY & TTY ---
+log_section "13/16 Disabling Accessibility"
 TARGETS=("/usr/libexec/at-spi-bus-launcher" "/usr/libexec/at-spi2-registryd" "/etc/xdg/autostart/at-spi-dbus-bus.desktop")
 for target in "${TARGETS[@]}"; do
     if [ -f "$target" ]; then
@@ -212,8 +265,8 @@ if ! grep -q "127.0.1.1.*$CURRENT_HOSTNAME" /etc/hosts; then
     echo "127.0.1.1 $CURRENT_HOSTNAME" >> /etc/hosts
 fi
 
-# --- 14. FIREFOX ---
-log_section "13/15 Firefox Optimization"
+# --- 15. FIREFOX ---
+log_section "14/16 Firefox Optimization"
 FF_DIR="$USER_HOME/.mozilla/firefox"
 if [ -d "$FF_DIR" ]; then
     find "$FF_DIR" -maxdepth 1 -type d -name "*.default*" | while read -r PROFILE_DIR; do
@@ -222,7 +275,7 @@ if [ -d "$FF_DIR" ]; then
         [ -f "$USER_JS" ] && cp "$USER_JS" "${USER_JS}.bak"
 
         cat <<EOF > "$USER_JS"
-// === v8.3 OPTIMIZATIONS ===
+// === v8.4 OPTIMIZATIONS ===
 user_pref("browser.cache.disk.enable", false);
 user_pref("browser.cache.disk.capacity", 0);
 user_pref("browser.cache.memory.enable", true);
@@ -242,28 +295,28 @@ EOF
     done
 fi
 
-# --- 15. STARTUP SCRIPT (FIXED) ---
-log_section "14/15 Startup Script"
+# --- 16. STARTUP SCRIPT ---
+log_section "15/16 Startup Script"
 STARTUP_FILE="$USER_HOME/.fluxbox/startup"
 if [ -f "$STARTUP_FILE" ]; then
     cp "$STARTUP_FILE" "${STARTUP_FILE}.bak.$(date +%s)"
     
-    # Disable dependencies we kept installed
+    # Disable lines for removed packages
     sed -i 's/^conkystart/#conkystart/g' "$STARTUP_FILE"
     sed -i 's|^/usr/lib/policykit-1-gnome/.*|#&|g' "$STARTUP_FILE"
     sed -i 's/^mx-welcome/#mx-welcome/g' "$STARTUP_FILE"
     sed -i 's/^picom/#picom/g' "$STARTUP_FILE"
     sed -i 's/^compton/#compton/g' "$STARTUP_FILE"
+    sed -i 's/^clipman/#clipman/g' "$STARTUP_FILE"
 
     read -r -d '' OPT_BLOCK << EOM || true
-# === GOLD MASTER v8.3 ===
+# === GOLD MASTER v8.4 ===
 export NO_AT_BRIDGE=1
 setxkbmap $KEYBOARD_LAYOUT &
 lxpolkit &
 # ========================
 EOM
     if ! grep -q "GOLD MASTER" "$STARTUP_FILE"; then
-        # FIX: Escape newlines for sed before insertion
         ESCAPED_BLOCK=$(echo "$OPT_BLOCK" | sed ':a;N;$!ba;s/\n/\\n/g')
         sed -i "/exec fluxbox/i $ESCAPED_BLOCK" "$STARTUP_FILE"
         log_info "Startup script updated."
@@ -273,8 +326,8 @@ EOM
     chown "${TARGET_USER}:${TARGET_USER}" "$STARTUP_FILE"
 fi
 
-# --- 16. CLEANUP & BOOT ---
-log_section "15/15 Final Cleanup"
+# --- 17. FINAL CLEANUP ---
+log_section "16/16 Final Cleanup"
 GRUB_FILE="/etc/default/grub"
 sed -i "s/^GRUB_TIMEOUT=[0-9]*/GRUB_TIMEOUT=$GRUB_TIMEOUT_VAL/" "$GRUB_FILE"
 sed -i 's/splash//g' "$GRUB_FILE"
@@ -283,17 +336,24 @@ if ! grep -q "fastboot" "$GRUB_FILE"; then
 fi
 update-grub
 
+# Remove residual configs in home
 rm -rf "$USER_HOME/.config/conky"
 rm -f "$USER_HOME/.config/autostart/conky.desktop"
+rm -f "$USER_HOME/.config/autostart/mx-welcome.desktop"
+rm -f "$USER_HOME/.config/autostart/mx-tour.desktop"
+rm -f "$USER_HOME/.config/autostart/clipman.desktop"
 
-# Disable autostart for things we kept installed but don't want
-[ -f /etc/xdg/autostart/mx-welcome.desktop ] && mv /etc/xdg/autostart/mx-welcome.desktop /etc/xdg/autostart/mx-welcome.desktop.bak
-[ -f /etc/xdg/autostart/mx-tour.desktop ] && mv /etc/xdg/autostart/mx-tour.desktop /etc/xdg/autostart/mx-tour.desktop.bak
+# Clean up dpkg distribution files (New Request)
+rm -f /etc/init.d/*.dpkg-distrib
+
+log_info "Running Localepurge..."
+dpkg-reconfigure -f noninteractive localepurge
+localepurge
 
 log_warn "ACTION REQUIRED: Confirm Auto-Remove."
 apt autoremove --purge
 apt clean
 
-log_section "OPTIMIZATION COMPLETE (v8.3)"
+log_section "OPTIMIZATION COMPLETE (v8.4)"
 log_info "Log file: $LOG_FILE"
 log_info "Please reboot manually to apply changes."
