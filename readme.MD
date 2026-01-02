@@ -1,124 +1,198 @@
-# 🚀 MX Fluxbox Ultimate Optimizer
+```
+# 🚀 OS Optimization Scripts
 
 ![Bash](https://img.shields.io/badge/Language-Bash-4EAA25?style=for-the-badge&logo=gnu-bash)
-![OS](https://img.shields.io/badge/OS-MX_Linux-blue?style=for-the-badge&logo=linux)
+![PowerShell](https://img.shields.io/badge/Language-PowerShell-149FDA?style=for-the-badge&logo=powershell)
+![OS](https://img.shields.io/badge/OS-MX_Linux%20%7C%20Windows_11-blue?style=for-the-badge&logo=linux)
 ![RAM](https://img.shields.io/badge/Idle_RAM-~200MB-green?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-orange?style=for-the-badge)
 
-> **Turn MX Linux Fluxbox into a lightweight rocket.** 
-> Reduces startup RAM consumption to approximately **200MB** by stripping unnecessary services, optimizing kernel parameters, and removing bloatware.
+> **Ultimate performance optimization scripts for both MX Linux Fluxbox and Windows 11.** 
+> These scripts aggressively debloat systems, optimize kernel parameters, and tune settings for maximum performance on low-spec hardware.
 
 ---
 
 ## 📖 About
-This script is designed for **MX Linux (Fluxbox Edition)**. It aggressively debloats the system, replaces heavy login managers with `nodm`, optimizes Firefox, and tunes the kernel for low-spec hardware or performance enthusiasts.
 
-**⚠️ Warning:** This script is destructive. It removes printer drivers, Bluetooth, VPN supports, and accessibility tools to achieve maximum performance.
+This repository contains two powerful optimization scripts designed to transform your operating system into a lightweight, high-performance machine:
+
+1. **MX Linux Fluxbox Optimizer** - Reduces startup RAM consumption to approximately **200MB**
+2. **Windows 11 Optimizer** - Comprehensive debloating and performance tuning for Windows 11
+
+Both scripts are designed for users who want maximum performance and are willing to sacrifice unnecessary features for speed.
+
+**⚠️ Warning:** These scripts are destructive. They remove printer drivers, Bluetooth, VPN supports, accessibility tools, and other features to achieve maximum performance.
 
 ---
 
-## ✨ Key Features
+## ✨ Available Optimizers
 
-*   **⚡ Ultra-Low Memory Usage:** Uses `zram` and kernel tuning (`vm.swappiness`, `vfs_cache_pressure`) to keep RAM usage ~200MB at boot.
-*   **🚀 Instant Boot:** Replaces `lightdm` with `nodm` for instant auto-login and sets Grub timeout to 0.
-*   **🧹 Aggressive Debloating:** Purges unused drivers (printers, scanners), accessibility tools, localized fonts, and heavy background services.
-*   **🦊 Firefox Hardening:** Inject a custom `user.js` for privacy and performance (disables telemetry, disk cache, and cosmetic animations).
-*   **🛠 System Tuning:**
-    *   Enables `EarlyOOM` to prevent system freezes.
-    *   Optimizes disk schedulers (`bfq` for HDDs).
-    *   Mounts `/tmp` and `/var/log` to RAM to save SSD wear.
-    *   Cleans up `localepurge` to keep only English/Italian locales (configurable).
+### 🐧 MX Linux Fluxbox Ultimate Optimizer
+
+![Bash](https://img.shields.io/badge/Language-Bash-4EAA25?style=for-the-badge&logo=gnu-bash)
+![OS](https://img.shields.io/badge/OS-MX_Linux-blue?style=for-the-badge&logo=linux)
+
+**Key Features:**
+*   **⚡ Ultra-Low Memory Usage:** Uses `zram` and kernel tuning to keep RAM usage ~200MB at boot
+*   **🚀 Instant Boot:** Replaces `lightdm` with `nodm` for instant auto-login
+*   **🧹 Aggressive Debloating:** Purges unused drivers, accessibility tools, and heavy background services
+*   **🦊 Firefox Hardening:** Inject custom `user.js` for privacy and performance
+*   **🛠 System Tuning:** Enables `EarlyOOM`, optimizes disk schedulers, mounts `/tmp` and `/var/log` to RAM
+
+**Installation:**
+```bash
+cd mx-fluxbox
+chmod +x boost.sh
+sudo ./boost.sh
+```
+
+**What Gets Removed:**
+*   **Connectivity:** Bluetooth, VPNs, Modem Managers
+*   **Printing/Scanning:** CUPS, HPLIP, Sane, Scanner drivers
+*   **Accessibility:** Orca, Speech Dispatcher, Onboard, Magnus
+*   **Apps:** LibreOffice, Thunderbird, unused games, MX-specific tools
+
+[**Full MX Fluxbox Documentation**](#mx-linux-fluxbox-optimizer-details)
+
+---
+
+### 💹 Windows 11 Ultimate Optimizer
+
+![PowerShell](https://img.shields.io/badge/Language-PowerShell-149FDA?style=for-the-badge&logo=powershell)
+![OS](https://img.shields.io/badge/OS-Windows_11-blue?style=for-the-badge&logo=windows)
+
+**Key Features:**
+*   **🔧 Interactive Tools Integration:** Massgrave, CTT WinUtil, Win11Debloat
+*   **🧹 Service Debloating:** Disables background services and telemetry
+*   **⚡ Power Optimization:** High Performance power plan, hibernation disabled
+*   **🎮 Gaming Tweaks:** Mouse acceleration disabled, transparency effects off
+*   **🛡️ Privacy:** Telemetry blocked, WebExperience disabled
+
+**Installation:**
+```powershell
+cd win11
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
+.\boost.ps1
+```
+
+**What Gets Disabled/Removed:**
+*   **Services:** Spooler, Fax, DiagTrack, Xbox services, Search indexing, SysMain
+*   **Telemetry:** Data collection blocked, TextInputHost disabled
+*   **Visual Effects:** Transparency effects disabled for GPU performance
+*   **Background Apps:** WebExperience and other background processes removed
+
+[**Full Windows 11 Documentation**](#windows-11-optimizer-details)
 
 ---
 
 ## 🛠️ Installation & Usage
 
-### 1. Download the Script
-Clone this repository or download the script directly.
+### MX Linux Fluxbox
 
+1. **Download the Script**
 ```bash
-git clone https://github.com/yourusername/mx-fluxbox-optimizer.git
-cd mx-fluxbox-optimizer
-chmod +x optimize.sh
+cd mx-fluxbox
+chmod +x boost.sh
 ```
 
-### 2. Configure (Optional but Recommended)
-Open the script and edit the variables at the top to match your specific needs:
-
+2. **Configure (Optional)**
+Open the script and edit variables at the top:
 ```bash
-# Inside the script
-KEYBOARD_LAYOUT="it"  # Change to "us", "fr", "de", etc.
-LOCALES_TO_KEEP="en, en_US, en_US.UTF-8, it, it_IT..." # Add your language
+KEYBOARD_LAYOUT="it"  # Change to your layout
+LOCALES_TO_KEEP="en, en_US, en_US.UTF-8, it..." # Add your languages
 ```
 
-### 3. Run as Root
-Execute the script using `sudo`.
-
+3. **Run as Root**
 ```bash
-sudo ./optimize.sh
+sudo ./boost.sh
 ```
 
 > **Note:** The script has an interactive safety pause. Press `ENTER` to begin, and confirm `Y` when `apt` asks for permission to purge packages.
 
----
+### Windows 11
 
-## 🗑️ What Gets Removed?
-To achieve the 200MB target, the script removes the following categories of software:
+1. **Run as Administrator**
+Right-click PowerShell and select "Run as Administrator"
 
-| Category | Items Removed |
-| :--- | :--- |
-| **Connectivity** | Bluetooth (`bluez`), VPNs (`openvpn`, `network-manager-pptp`), Modem Managers |
-| **Printing/Scanning** | CUPS, HPLIP, Sane, Scanner drivers |
-| **Accessibility** | Orca, Speech Dispatcher, Onboard, Magnus |
-| **MX Specifics** | MX-Tour, MX-Welcome, Conky, MX-Docs |
-| **Apps** | LibreOffice components, CD Burners (`xfburn`), Thunderbird, unused games |
+2. **Execute the Script**
+```powershell
+cd win11
+.\boost.ps1
+```
+
+3. **Follow Interactive Prompts**
+The script will launch several optimization tools that require user interaction
+
+4. **Manual Actions Required**
+After the script completes, you'll need to:
+*   Disable swap/pagefile (if you have 32GB+ RAM)
+*   Install AIM Toolkit for Ramdisk usage
+*   Enable XMP/DOCP in BIOS for RAM speed
+*   Restart your computer
 
 ---
 
 ## ⚙️ Under the Hood
 
-### 🖥️ Display Manager
-The script disables `LightDM` and installs `nodm`.
-*   **Result:** The system boots directly into the Fluxbox desktop without a login screen (Auto-login is forced for the sudo user).
+### MX Linux Fluxbox Optimizer Details
 
-### 🧠 Memory Management
-*   **ZRAM:** Creates a compressed swap block in RAM (60% of total RAM).
-*   **Sysctl:** 
-    *   `vm.swappiness=100` (Aggressively use ZRAM).
-    *   `vm.vfs_cache_pressure=50`.
-*   **EarlyOOM:** Kills heavy processes if RAM becomes critically low, preferring to kill the browser rather than the X server.
+#### 🖥️ Display Manager
+*   Disables `LightDM` and installs `nodm`
+*   **Result:** System boots directly into Fluxbox desktop without login screen
 
-### 🏠 Fluxbox Configuration
-*   Backs up your current `~/.fluxbox/startup`.
-*   Disables `conky`, `compton`/`picom`, and `clipman`.
-*   Injects `lxpolkit` (PolicyKit authentication agent) and keyboard layout settings.
+#### 🧠 Memory Management
+*   **ZRAM:** Creates compressed swap block in RAM (60% of total RAM)
+*   **Sysctl:** `vm.swappiness=100`, `vm.vfs_cache_pressure=50`
+*   **EarlyOOM:** Kills heavy processes if RAM becomes critically low
+
+#### 🏠 Fluxbox Configuration
+*   Disables `conky`, `compton`/`picom`, and `clipman`
+*   Injects `lxpolkit` (PolicyKit authentication agent)
+*   Sets keyboard layout automatically
+
+### Windows 11 Optimizer Details
+
+#### 🔧 Interactive Tools
+*   **Massgrave:** System activation and cleanup
+*   **CTT WinUtil:** Chris Titus Tech optimization suite
+*   **Win11Debloat:** Comprehensive Windows debloating
+
+#### 🛡️ Privacy & Performance
+*   **Telemetry Blocking:** Disables Microsoft data collection
+*   **Service Management:** Stops and disables unnecessary background services
+*   **Visual Optimization:** Disables transparency and animations for GPU performance
+
+#### ⚡ Power Management
+*   **High Performance Plan:** Sets optimal power settings
+*   **Hibernation Disabled:** Frees up SSD space equivalent to RAM size
+*   **Mouse Precision:** Disables acceleration for 1:1 movement
 
 ---
 
-## 📝 Configuration Variables
+## ⚠️ Important Disclaimers
 
-If you want to customize the script before running, look for these variables at the top of the file:
-
-*   `KEYBOARD_LAYOUT`: Sets the X11 keyboard layout (Default: `it`).
-*   `LOCALES_TO_KEEP`: Which languages `localepurge` should save (Default: `en` and `it`).
-*   `GRUB_TIMEOUT_VAL`: How long the boot menu waits (Default: `0` seconds).
-
----
-
-## ⚠️ Disclaimer
 **Use at your own risk.**
-This script is intended for experienced users who want a minimal system.
-1.  **Backup your data** before running this.
-2.  If you use a printer or Bluetooth mouse, **do not run this script blindly** (or edit the `apt purge` section first).
-3.  The script creates a detailed log file at `/var/log/mx_optimization_*.log`.
+
+1.  **Backup your data** before running these scripts.
+2.  If you use printers, Bluetooth devices, or accessibility tools, **do not run these scripts blindly** (or edit the removal sections first).
+3.  The MX Linux script creates a detailed log file at `/var/log/mx_optimization_*.log`.
+4.  The Windows script requires administrator privileges and makes system-level changes.
+5.  Some optimizations may affect system functionality - review the removed items carefully.
 
 ---
 
 ## 🤝 Contributing
-Found a way to save another 10MB of RAM? Pull requests are welcome!
+
+Found a way to save another 10MB of RAM or improve Windows performance? Pull requests are welcome!
 
 1.  Fork the Project
 2.  Create your Feature Branch
 3.  Commit your Changes
 4.  Push to the Branch
 5.  Open a Pull Request
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
