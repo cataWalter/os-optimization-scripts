@@ -128,6 +128,7 @@ apt purge \
     sane-utils blueman bluez flatpak baobab catfish \
     libsane1 mugshot \
     mx-tour mx-welcome mx-welcome-data \
+    mx-doc* mx-faq* \
     exim4-base exim4-config gnome-keyring gnome-keyring-pkcs11 libpam-gnome-keyring
 
 log_info "Cleaning residual configs..."
@@ -208,9 +209,15 @@ STARTUP_FILE="$USER_HOME/.fluxbox/startup"
 if [ -f "$STARTUP_FILE" ]; then
     cp "$STARTUP_FILE" "${STARTUP_FILE}.bak.$(date +%s)"
     
-    for item in conkystart mx-welcome picom compton clipman; do
+    # Comment specific commands (single word or simple start)
+    for item in conkystart mx-welcome picom compton clipman xfce4-clipman idesktoggle; do
         sed -i "s/^$item/#$item/g" "$STARTUP_FILE"
     done
+
+    # Comment specific complex commands requested
+    sed -i 's|^idesk on .*|#&|g' "$STARTUP_FILE"
+    sed -i 's|.*DefaultDock.mxdk|#&|g' "$STARTUP_FILE"
+    sed -i 's|.*/usr/libexec/at-spi-bus-launcher.*|#&|g' "$STARTUP_FILE"
     sed -i 's|^/usr/lib/policykit-1-gnome/.*|#&|g' "$STARTUP_FILE"
 
     read -r -d '' OPT_BLOCK << EOM || true
